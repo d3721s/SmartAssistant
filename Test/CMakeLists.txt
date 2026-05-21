@@ -13,6 +13,21 @@ add_test(
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
 
+add_executable(test_wakeup_manager
+    test_wakeup_manager.cpp
+)
+
+target_link_libraries(test_wakeup_manager
+    PRIVATE
+        SmartAssistantWakeupManager
+)
+
+add_test(
+    NAME    test_wakeup_manager
+    COMMAND test_wakeup_manager
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+
 add_executable(test_network_manager
     test_network_manager.cpp
 )
