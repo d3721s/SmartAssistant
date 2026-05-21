@@ -51,6 +51,7 @@ dump/
 
 # IDE and editor files
 .vscode/
+.claude/
 .idea/
 *.suo
 *.user

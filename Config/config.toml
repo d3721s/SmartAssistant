@@ -43,3 +43,41 @@ recover_backoff_base_ms = 500
 enable_metrics = true
 enable_audio_dump = false
 dump_dir = "/var/log/audio/dump"
+
+[network]
+monitor_interval_ms = 200
+rtt_threshold_ms = 800
+connect_timeout_ms = 3000
+recovery_stable_duration_ms = 1
+consecutive_timeout_limit = 3
+degrade_on_poor_network = false
+start_monitor_on_init = false
+
+[[network.endpoints]]
+group = "ASR"
+name = "doubao_asr_stream_async"
+url = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+
+[[network.endpoints]]
+group = "ASR"
+name = "doubao_asr_stream"
+url = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel"
+
+[[network.endpoints]]
+group = "TTS"
+name = "doubao_tts_v3_unidirectional"
+url = "wss://openspeech.bytedance.com/api/v3/tts/unidirectional/stream"
+
+[[network.endpoints]]
+group = "TTS"
+name = "doubao_tts_v3_bidirection"
+url = "wss://openspeech.bytedance.com/api/v3/tts/bidirection"
+
+[[network.endpoints]]
+group = "TTS"
+name = "doubao_tts_v1_http"
+url = "https://openspeech.bytedance.com/api/v1/tts"
+
+[connectivity_test]
+attempt_count = 4
+state_wait_ms = 1200
