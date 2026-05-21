@@ -99,6 +99,52 @@ target_link_libraries(SmartAssistantNetworkManager
         Threads::Threads
 )
 
+# ----------------------------------------------------------------------------
+# WakeupManager — KWS + SV based on sherpa-onnx
+# ----------------------------------------------------------------------------
+find_path(SHERPA_ONNX_INCLUDE_DIR
+    NAMES sherpa-onnx/c-api/c-api.h
+    HINTS /usr/local/include /usr/include
+)
+
+find_library(SHERPA_ONNX_C_API_LIB
+    NAMES sherpa-onnx-c-api
+    HINTS /usr/local/lib /usr/lib /usr/lib/x86_64-linux-gnu
+)
+
+find_library(SHERPA_ONNX_RUNTIME_LIB
+    NAMES onnxruntime
+    HINTS /usr/local/lib /usr/lib /usr/lib/x86_64-linux-gnu
+)
+
+if(NOT SHERPA_ONNX_INCLUDE_DIR OR NOT SHERPA_ONNX_C_API_LIB OR NOT SHERPA_ONNX_RUNTIME_LIB)
+    message(FATAL_ERROR
+        "sherpa-onnx not found. Install the official linux-x64 shared "
+        "tarball into /usr/local (libsherpa-onnx-c-api.so, libonnxruntime.so, "
+        "and headers under /usr/local/include/sherpa-onnx).")
+endif()
+
+add_library(SmartAssistantWakeupManager
+    SmartAssistant/WakeupManager.cpp
+)
+
+target_include_directories(SmartAssistantWakeupManager
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/SmartAssistant"
+        ${SHERPA_ONNX_INCLUDE_DIR}
+)
+
+target_link_libraries(SmartAssistantWakeupManager
+    PUBLIC
+        SmartAssistantAudioManager
+        tomlplusplus::tomlplusplus
+        quill::quill
+    PRIVATE
+        Threads::Threads
+        ${SHERPA_ONNX_C_API_LIB}
+        ${SHERPA_ONNX_RUNTIME_LIB}
+)
+
 if(BUILD_TESTING)
     add_subdirectory(Test)
 endif()

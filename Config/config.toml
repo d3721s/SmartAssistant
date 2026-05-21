@@ -81,3 +81,43 @@ url = "https://openspeech.bytedance.com/api/v1/tts" # 端点 URL；HTTP TTS 接�
 [connectivity_test] # 连通性测试参数
 attempt_count = 4 # 每个端点最多探测次数
 state_wait_ms = 1200 # 启动网络监控后等待状态稳定的时间，单位毫秒
+
+[wakeup] # 唤醒模块（KWS + SV）总配置
+keywords = ["你好弈宝", "弈宝弈宝"] # 唤醒词列表；用于日志/事件展示，实际识别由 keywords_file 决定
+sample_rate = 16000 # 唤醒模型期望的输入采样率，单位 Hz；sherpa-onnx 流式 KWS 模型固定 16k
+frame_queue_depth = 50 # FrameDispatcher 唤醒消费者队列深度，与系统架构默认值保持一致
+mute_on_init = false # 初始化后是否处于静默状态；对话进行中由 SmartAssistant 通过 muteWakeup() 控制
+cooldown_ms = 1500 # 单次唤醒后的冷却时间，单位毫秒；防止同一句话连续触发多次
+
+[wakeup.kws] # 关键词检测引擎（sherpa-onnx KeywordSpotter）配置
+encoder = "models/kws/encoder.int8.onnx" # 流式 Zipformer-Transducer 编码器模型路径
+decoder = "models/kws/decoder.onnx" # 流式 Zipformer-Transducer 解码器模型路径
+joiner = "models/kws/joiner.int8.onnx" # 流式 Zipformer-Transducer 联合网络模型路径
+tokens = "models/kws/tokens.txt" # tokens.txt 文件路径
+keywords_file = "models/kws/keywords.txt" # 自定义唤醒词文件，每行 "<token-seq> @<原始文字>"
+provider = "cpu" # ONNX Runtime 执行后端；cpu / cuda / coreml
+num_threads = 1 # ONNX Runtime 推理线程数；嵌入式设备建议 1
+max_active_paths = 4 # 解码搜索中同时维护的活跃路径数；越大越准但耗时越长
+keywords_score = 1.5 # 唤醒词奖励分数；越大越容易触发
+keywords_threshold = 0.25 # 触发阈值；越大越保守，建议 0.20~0.35
+num_trailing_blanks = 1 # 触发前需要的尾部 blank 数量；用于稳定终点
+feature_dim = 80 # 模型期望的 fbank 特征维度
+debug = false # 是否打印 sherpa-onnx 调试信息
+
+[wakeup.sv] # 说话人验证（声纹）引擎（sherpa-onnx SpeakerEmbeddingExtractor）配置
+enabled = true # 是否启用 SV；关闭后所有唤醒事件直接判为通过
+model = "models/sv/sv.onnx" # 声纹模型路径（3D-Speaker ERes2Net 16k）
+provider = "cpu" # ONNX Runtime 执行后端
+num_threads = 1 # 推理线程数
+threshold = 0.55 # 余弦相似度阈值，超过则视为本人；建议 0.5~0.7
+sample_rate = 16000 # SV 模型期望的输入采样率
+analyze_window_ms = 1500 # 唤醒触发后回看的音频窗口长度，用于做 SV 推理（毫秒）
+require_enrolled_user = false # 是否仅在已注册说话人匹配时才允许唤醒；false 时未注册也放行（仅记录无身份）
+debug = false # 是否打印 sherpa-onnx 调试信息
+
+[wakeup.logging] # 唤醒模块日志配置
+log_dir = "logs" # 日志目录（相对于工作目录）；不存在会自动创建
+log_file = "wakeup.log" # 唤醒日志文件名
+console = true # 是否同时输出到控制台
+rotation_max_bytes = 10485760 # 单文件最大字节数，超过后滚动；10 MB
+rotation_max_files = 7 # 最多保留的滚动文件数；7 天周转
