@@ -1,83 +1,83 @@
-[audio]
-backend = "alsa"
+[audio] # 音频模块总配置
+backend = "alsa" # 音频后端类型；当前使用 ALSA，配合 pulse 设备输出到系统音频
 
-[audio.capture]
-device = "pulse"
-sample_rate = 48000
-channels = 2
-channel_map = [0, 1]
-format = "s16"
-frame_ms = 10
+[audio.capture] # 录音/麦克风采集配置
+device = "pulse" # ALSA 输入设备名；pulse 表示通过 PulseAudio/WSLg 获取输入
+sample_rate = 48000 # 采集采样率，单位 Hz；48kHz 是常见音频设备原生采样率
+channels = 2 # 采集通道数；2 表示双声道输入
+channel_map = [0, 1] # 输入通道映射；这里保留第 0、1 两个通道
+format = "s16" # 采集样本格式；s16 表示 16-bit signed PCM
+frame_ms = 10 # 每帧采集时长，单位毫秒；10ms 适合低延迟实时处理
 
-[audio.playback]
-device = "pulse"
-sample_rate = 48000
-channels = 2
-format = "s16"
-frame_ms = 10
+[audio.playback] # 播放/扬声器输出配置
+device = "pulse" # ALSA 输出设备名；pulse 表示通过 PulseAudio/WSLg 播放
+sample_rate = 48000 # 播放采样率，单位 Hz；需和设备能力匹配
+channels = 2 # 播放通道数；2 表示双声道输出
+format = "s16" # 播放样本格式；s16 表示 16-bit signed PCM
+frame_ms = 10 # 每帧播放时长，单位毫秒；越小延迟越低但线程调度压力越大
 
-[audio.processing]
-pipeline = "far_field"
-aec = true
-ns = true
-agc = true
-vad = true
-beamforming = true
-output_sample_rate = 16000
-output_channels = 1
-aec_reference_delay_ms = 120
+[audio.processing] # 音频处理链路配置
+pipeline = "far_field" # 处理管线类型；far_field 表示远场语音场景
+aec = true # 回声消除开关；测试播放/录音时可关闭以减少处理影响
+ns = true # 降噪开关；关闭后保留原始噪声特征
+agc = true # 自动增益控制开关；关闭后不自动放大/压缩录音
+vad = true # 语音活动检测开关；关闭后不产生 VAD 语音起止事件
+beamforming = true # 波束成形开关；双麦/多麦定向增强时使用
+output_sample_rate = 48000 # 处理后输出采样率，单位 Hz；ASR 常用 16kHz
+output_channels = 1 # 处理后输出通道数；1 表示单声道
+aec_reference_delay_ms = 120 # AEC 参考延迟，单位毫秒；用于对齐播放参考和麦克风采集
 
-[audio.volume]
-master = 0.75
-tts = 0.90
-prompt = 0.80
-media = 0.70
-alarm = 1.00
-ducking_gain = 0.35
+[audio.volume] # 软件音量配置，不修改系统音量
+master = 0.75 # 主音量，范围 0.0-1.0；作用于最终混音输出
+tts = 0.90 # TTS 播放流音量系数；语音播报使用
+prompt = 0.80 # 提示音播放流音量系数；系统提示/短音效使用
+media = 0.70 # 媒体/背景音播放流音量系数；背景音乐使用
+alarm = 1.00 # 闹钟/告警播放流音量系数；通常保持最高优先级和音量
+ducking_gain = 0.2 # ducking 后背景音保留比例；0.2 表示背景音降到 20%
 
-[audio.device]
-max_recover_retries = 5
-recover_backoff_base_ms = 500
+[audio.device] # 音频设备恢复配置
+max_recover_retries = 5 # 设备异常后的最大重试次数
+recover_backoff_base_ms = 500 # 恢复重试基础退避时间，单位毫秒
 
-[audio.diagnostics]
-enable_metrics = true
-enable_audio_dump = false
-dump_dir = "/var/log/audio/dump"
+[audio.diagnostics] # 音频诊断和指标配置
+enable_metrics = true # 是否启用周期性指标日志
+enable_audio_dump = false # 是否启用 PCM dump；开启会写音频文件，可能占用磁盘
+dump_dir = "/var/log/audio/dump" # PCM dump 输出目录；需要运行用户有写权限
 
-[network]
-monitor_interval_ms = 200
-rtt_threshold_ms = 800
-connect_timeout_ms = 3000
-recovery_stable_duration_ms = 1
-consecutive_timeout_limit = 3
-degrade_on_poor_network = false
-start_monitor_on_init = false
+[network] # 网络状态检测配置
+monitor_interval_ms = 200 # 网络监控轮询间隔，单位毫秒
+rtt_threshold_ms = 800 # RTT 阈值，单位毫秒；超过后可认为网络质量较差
+connect_timeout_ms = 3000 # 单次连接/探测超时时间，单位毫秒
+recovery_stable_duration_ms = 1 # 网络恢复判定所需稳定时间，单位毫秒
+consecutive_timeout_limit = 3 # 连续超时次数阈值；达到后可判定网络异常
+degrade_on_poor_network = true # 网络差时是否主动降级到离线/备用能力
+start_monitor_on_init = false # NetworkManager 初始化后是否立即启动后台监控
 
-[[network.endpoints]]
-group = "ASR"
-name = "doubao_asr_stream_async"
-url = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+[[network.endpoints]] # 网络探测端点配置项
+group = "ASR" # 端点分组；ASR 表示语音识别服务
+name = "doubao_asr_stream_async" # 端点名称；用于日志和测试输出识别
+url = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async" # 端点 URL；异步流式 ASR WebSocket
 
-[[network.endpoints]]
-group = "ASR"
-name = "doubao_asr_stream"
-url = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel"
+[[network.endpoints]] # 网络探测端点配置项
+group = "ASR" # 端点分组；ASR 表示语音识别服务
+name = "doubao_asr_stream" # 端点名称；用于日志和测试输出识别
+url = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel" # 端点 URL；流式 ASR WebSocket
 
-[[network.endpoints]]
-group = "TTS"
-name = "doubao_tts_v3_unidirectional"
-url = "wss://openspeech.bytedance.com/api/v3/tts/unidirectional/stream"
+[[network.endpoints]] # 网络探测端点配置项
+group = "TTS" # 端点分组；TTS 表示语音合成服务
+name = "doubao_tts_v3_unidirectional" # 端点名称；用于日志和测试输出识别
+url = "wss://openspeech.bytedance.com/api/v3/tts/unidirectional/stream" # 端点 URL；单向流式 TTS WebSocket
 
-[[network.endpoints]]
-group = "TTS"
-name = "doubao_tts_v3_bidirection"
-url = "wss://openspeech.bytedance.com/api/v3/tts/bidirection"
+[[network.endpoints]] # 网络探测端点配置项
+group = "TTS" # 端点分组；TTS 表示语音合成服务
+name = "doubao_tts_v3_bidirection" # 端点名称；用于日志和测试输出识别
+url = "wss://openspeech.bytedance.com/api/v3/tts/bidirection" # 端点 URL；双向流式 TTS WebSocket
 
-[[network.endpoints]]
-group = "TTS"
-name = "doubao_tts_v1_http"
-url = "https://openspeech.bytedance.com/api/v1/tts"
+[[network.endpoints]] # 网络探测端点配置项
+group = "TTS" # 端点分组；TTS 表示语音合成服务
+name = "doubao_tts_v1_http" # 端点名称；用于日志和测试输出识别
+url = "https://openspeech.bytedance.com/api/v1/tts" # 端点 URL；HTTP TTS 接口
 
-[connectivity_test]
-attempt_count = 4
-state_wait_ms = 1200
+[connectivity_test] # 连通性测试参数
+attempt_count = 4 # 每个端点最多探测次数
+state_wait_ms = 1200 # 启动网络监控后等待状态稳定的时间，单位毫秒

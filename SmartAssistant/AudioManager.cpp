@@ -118,10 +118,12 @@ inline float clampf(float v, float lo, float hi) {
 }
 
 inline float linearToLogGain(float linear) {
-    // Map [0,1] linear UI value to log-curve gain.
-    // gain = 10^((linear-1) * 4) so that 0.0 -> -80 dB, 1.0 -> 0 dB.
+    // Map [0,1] UI value to a gentle logarithmic gain curve.
+    // The previous -80 dB curve made normal values such as 0.75 become 0.1
+    // before stream gains were applied, which made playback much quieter than
+    // users expect.  Keep 0.0 as silence, and map the rest over a 20 dB range.
     if (linear <= 0.0f) return 0.0f;
-    return std::pow(10.0f, (linear - 1.0f) * 4.0f);
+    return std::pow(10.0f, (clampf(linear, 0.0f, 1.0f) - 1.0f));
 }
 
 void setRealtimePriority(const char* name, int priority) {
@@ -953,6 +955,7 @@ public:
         master_target_ = linearToLogGain(cfg.master);
         master_actual_ = master_target_;
         ducking_       = 1.0f;
+        ducking_target_ = 1.0f;
         muted_         = false;
     }
 
@@ -989,22 +992,30 @@ public:
         }
     }
 
-    // Compute composite gain for one frame; advance ramp by `frames` samples.
+    // Compute master gain for one frame; advance ramp by `frames` samples.
     float advanceMaster(int frames) {
         std::lock_guard<std::mutex> lk(mtx_);
         if (muted_) return 0.0f;
         const int   ramp_samples = std::max(1, sample_rate_ * 10 / 1000);
         const float master_step  = (master_target_ - master_actual_) /
                                    (float)ramp_samples;
-        const float duck_step    = (ducking_target_ - ducking_) /
-                                   (float)ramp_samples;
         master_actual_ += master_step * (float)frames;
-        ducking_       += duck_step   * (float)frames;
         if (std::fabs(master_target_ - master_actual_) < 1e-4f)
             master_actual_ = master_target_;
+        return master_actual_;
+    }
+
+    // Compute ducking gain for duckable streams only.  This must not be
+    // multiplied into the final mix, otherwise foreground TTS is ducked too.
+    float advanceDucking(int frames) {
+        std::lock_guard<std::mutex> lk(mtx_);
+        const int   ramp_samples = std::max(1, sample_rate_ * 10 / 1000);
+        const float duck_step    = (ducking_target_ - ducking_) /
+                                   (float)ramp_samples;
+        ducking_ += duck_step * (float)frames;
         if (std::fabs(ducking_target_ - ducking_) < 1e-4f)
             ducking_ = ducking_target_;
-        return master_actual_ * ducking_;
+        return ducking_;
     }
 
     bool muted() const {
@@ -1740,6 +1751,11 @@ private:
         return pcm;
     }
 
+    static bool isDuckedPriority(PlaybackPriority p) {
+        return p == PlaybackPriority::MEDIA ||
+               p == PlaybackPriority::BLUETOOTH;
+    }
+
     void loop() {
         setRealtimePriority("audio_playback", 79);
         ALOG_INFO("PlaybackThread started ({} ch @ {} Hz, period={})",
@@ -1763,8 +1779,11 @@ private:
                 snap = streams_;
             }
             std::vector<PlaybackHandle> finished;
+            const float ducking = vol_.advanceDucking(period);
             for (auto& s : snap) {
                 if (!s->active) continue;
+                const float stream_ducking =
+                    isDuckedPriority(s->priority) ? ducking : 1.0f;
                 // Per-stream gain ramping (10 ms).
                 const int ramp = std::max(1, neg_.sample_rate * 10 / 1000);
                 for (int n = 0; n < period; ++n) {
@@ -1786,13 +1805,15 @@ private:
                         const int16_t sample =
                             s->pcm[s->pos + (size_t)c % s->pcm.size()];
                         mix_f[(size_t)n * channels + c] +=
-                            ((float)sample / 32768.0f) * s->gain_actual;
+                            ((float)sample / 32768.0f) *
+                            s->gain_actual * stream_ducking;
                     }
                     s->pos += channels;
                 }
             }
 
-            // Master volume + ducking ramp.
+            // Master volume is applied to the final mix.  Ducking is applied
+            // per duckable stream above so foreground streams keep full gain.
             const float master = vol_.advanceMaster(period);
             for (size_t i = 0; i < mix_f.size(); ++i) {
                 mix_f[i] *= master;
