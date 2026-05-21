@@ -1,0 +1,45 @@
+[audio]
+backend = "alsa"
+
+[audio.capture]
+device = "pulse"
+sample_rate = 48000
+channels = 2
+channel_map = [0, 1]
+format = "s16"
+frame_ms = 10
+
+[audio.playback]
+device = "pulse"
+sample_rate = 48000
+channels = 2
+format = "s16"
+frame_ms = 10
+
+[audio.processing]
+pipeline = "far_field"
+aec = true
+ns = true
+agc = true
+vad = true
+beamforming = true
+output_sample_rate = 16000
+output_channels = 1
+aec_reference_delay_ms = 120
+
+[audio.volume]
+master = 0.75
+tts = 0.90
+prompt = 0.80
+media = 0.70
+alarm = 1.00
+ducking_gain = 0.35
+
+[audio.device]
+max_recover_retries = 5
+recover_backoff_base_ms = 500
+
+[audio.diagnostics]
+enable_metrics = true
+enable_audio_dump = false
+dump_dir = "/var/log/audio/dump"
