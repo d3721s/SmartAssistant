@@ -3,7 +3,7 @@ backend = "alsa" # 音频后端类型；当前使用 ALSA，配合 pulse 设备�
 
 [audio.capture] # 录音/麦克风采集配置
 device = "pulse" # ALSA 输入设备名；pulse 表示通过 PulseAudio/WSLg 获取输入
-sample_rate = 48000 # 采集采样率，单位 Hz；48kHz 是常见音频设备原生采样率
+sample_rate = 16000 # 采集采样率，单位 Hz；48kHz 是常见音频设备原生采样率
 channels = 2 # 采集通道数；2 表示双声道输入
 channel_map = [0, 1] # 输入通道映射；这里保留第 0、1 两个通道
 format = "s16" # 采集样本格式；s16 表示 16-bit signed PCM
@@ -11,7 +11,7 @@ frame_ms = 10 # 每帧采集时长，单位毫秒；10ms 适合低延迟实时�
 
 [audio.playback] # 播放/扬声器输出配置
 device = "pulse" # ALSA 输出设备名；pulse 表示通过 PulseAudio/WSLg 播放
-sample_rate = 48000 # 播放采样率，单位 Hz；需和设备能力匹配
+sample_rate = 16000 # 播放采样率，单位 Hz；需和设备能力匹配
 channels = 2 # 播放通道数；2 表示双声道输出
 format = "s16" # 播放样本格式；s16 表示 16-bit signed PCM
 frame_ms = 10 # 每帧播放时长，单位毫秒；越小延迟越低但线程调度压力越大
@@ -23,15 +23,15 @@ ns = true # 降噪开关；关闭后保留原始噪声特征
 agc = true # 自动增益控制开关；关闭后不自动放大/压缩录音
 vad = true # 语音活动检测开关；关闭后不产生 VAD 语音起止事件
 beamforming = true # 波束成形开关；双麦/多麦定向增强时使用
-output_sample_rate = 48000 # 处理后输出采样率，单位 Hz；ASR 常用 16kHz
+output_sample_rate = 16000 # 处理后输出采样率，单位 Hz；ASR 常用 16kHz
 output_channels = 1 # 处理后输出通道数；1 表示单声道
 aec_reference_delay_ms = 120 # AEC 参考延迟，单位毫秒；用于对齐播放参考和麦克风采集
 
 [audio.volume] # 软件音量配置，不修改系统音量
-master = 0.75 # 主音量，范围 0.0-1.0；作用于最终混音输出
-tts = 0.90 # TTS 播放流音量系数；语音播报使用
-prompt = 0.80 # 提示音播放流音量系数；系统提示/短音效使用
-media = 0.70 # 媒体/背景音播放流音量系数；背景音乐使用
+master = 1.00 # 主音量，范围 0.0-1.0；作用于最终混音输出
+tts = 1.00 # TTS 播放流音量系数；语音播报使用，默认不压低
+prompt = 1.00 # 提示音播放流音量系数；系统提示/短音效使用
+media = 1.00 # 媒体/背景音播放流音量系数；背景音乐使用
 alarm = 1.00 # 闹钟/告警播放流音量系数；通常保持最高优先级和音量
 ducking_gain = 0.2 # ducking 后背景音保留比例；0.2 表示背景音降到 20%
 
@@ -40,7 +40,7 @@ max_recover_retries = 5 # 设备异常后的最大重试次数
 recover_backoff_base_ms = 500 # 恢复重试基础退避时间，单位毫秒
 
 [audio.diagnostics] # 音频诊断和指标配置
-enable_metrics = true # 是否启用周期性指标日志
+enable_metrics = false # 是否启用周期性指标日志
 enable_audio_dump = false # 是否启用 PCM dump；开启会写音频文件，可能占用磁盘
 dump_dir = "/var/log/audio/dump" # PCM dump 输出目录；需要运行用户有写权限
 
@@ -83,30 +83,30 @@ attempt_count = 4 # 每个端点最多探测次数
 state_wait_ms = 1200 # 启动网络监控后等待状态稳定的时间，单位毫秒
 
 [wakeup] # 唤醒模块（KWS + SV）总配置
-keywords = ["你好弈宝", "弈宝弈宝"] # 唤醒词列表；用于日志/事件展示，实际识别由 keywords_file 决定
+keywords = ["你好弈宝", "弈宝弈宝", "嗨弈宝"] # 唤醒词列表；用于日志/事件展示，实际识别由 keywords_file 决定
 sample_rate = 16000 # 唤醒模型期望的输入采样率，单位 Hz；sherpa-onnx 流式 KWS 模型固定 16k
 frame_queue_depth = 50 # FrameDispatcher 唤醒消费者队列深度，与系统架构默认值保持一致
 mute_on_init = false # 初始化后是否处于静默状态；对话进行中由 SmartAssistant 通过 muteWakeup() 控制
 cooldown_ms = 1500 # 单次唤醒后的冷却时间，单位毫秒；防止同一句话连续触发多次
 
-[wakeup.kws] # 关键词检测引擎（sherpa-onnx KeywordSpotter）配置
-encoder = "models/kws/encoder.int8.onnx" # 流式 Zipformer-Transducer 编码器模型路径
-decoder = "models/kws/decoder.onnx" # 流式 Zipformer-Transducer 解码器模型路径
-joiner = "models/kws/joiner.int8.onnx" # 流式 Zipformer-Transducer 联合网络模型路径
+[wakeup.kws] # 关键词检测引擎（sherpa-onnx KeywordSpotter）配置；当前模型：sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20
+encoder = "models/kws/encoder.int8.onnx" # 流式 Zipformer-Transducer 编码器模型路径（epoch-13 avg-2 chunk-16 left-64 int8）
+decoder = "models/kws/decoder.onnx" # 流式 Zipformer-Transducer 解码器模型路径（epoch-13 avg-2 chunk-16 left-64）
+joiner = "models/kws/joiner.int8.onnx" # 流式 Zipformer-Transducer 联合网络模型路径（epoch-13 avg-2 chunk-16 left-64 int8）
 tokens = "models/kws/tokens.txt" # tokens.txt 文件路径
 keywords_file = "models/kws/keywords.txt" # 自定义唤醒词文件，每行 "<token-seq> @<原始文字>"
 provider = "cpu" # ONNX Runtime 执行后端；cpu / cuda / coreml
 num_threads = 1 # ONNX Runtime 推理线程数；嵌入式设备建议 1
 max_active_paths = 4 # 解码搜索中同时维护的活跃路径数；越大越准但耗时越长
-keywords_score = 1.5 # 唤醒词奖励分数；越大越容易触发
+keywords_score = 1.0 # 唤醒词奖励分数；新 zh-en-3M 模型官方示例值为 1.0，越大越容易触发
 keywords_threshold = 0.25 # 触发阈值；越大越保守，建议 0.20~0.35
 num_trailing_blanks = 1 # 触发前需要的尾部 blank 数量；用于稳定终点
 feature_dim = 80 # 模型期望的 fbank 特征维度
 debug = false # 是否打印 sherpa-onnx 调试信息
 
 [wakeup.sv] # 说话人验证（声纹）引擎（sherpa-onnx SpeakerEmbeddingExtractor）配置
-enabled = true # 是否启用 SV；关闭后所有唤醒事件直接判为通过
-model = "models/sv/sv.onnx" # 声纹模型路径（3D-Speaker ERes2Net 16k）
+enabled = false # 是否启用 SV；关闭后所有唤醒事件直接判为通过
+model = "models/sv/sv.onnx" # 声纹模型路径（3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx）
 provider = "cpu" # ONNX Runtime 执行后端
 num_threads = 1 # 推理线程数
 threshold = 0.55 # 余弦相似度阈值，超过则视为本人；建议 0.5~0.7
@@ -115,9 +115,752 @@ analyze_window_ms = 1500 # 唤醒触发后回看的音频窗口长度，用于�
 require_enrolled_user = false # 是否仅在已注册说话人匹配时才允许唤醒；false 时未注册也放行（仅记录无身份）
 debug = false # 是否打印 sherpa-onnx 调试信息
 
+[wakeup.tts_ack]
+enabled = true
+phrases = [
+  "您好，有什么可以帮您？",
+  "我能帮您做什么？",
+  "请吩咐。",
+  "我在听。",
+  "有什么需要帮忙的吗？",
+]
+voice = "zh_female_vv_uranus_bigtts"
+language = "zh-CN"
+speed = 1.0
+volume = 1.0
+
 [wakeup.logging] # 唤醒模块日志配置
 log_dir = "logs" # 日志目录（相对于工作目录）；不存在会自动创建
 log_file = "wakeup.log" # 唤醒日志文件名
 console = true # 是否同时输出到控制台
 rotation_max_bytes = 10485760 # 单文件最大字节数，超过后滚动；10 MB
 rotation_max_files = 7 # 最多保留的滚动文件数；7 天周转
+
+[asr] # 语音识别（ASR）模块总配置
+mode = "streaming" # 默认识别模式；streaming（流式）、batch（非流式整段）、auto（自动）
+preferred_engine = "online" # 首选引擎；online（豆包流式）、offline（sherpa-onnx 流式）
+fallback_to_offline = false # 在线引擎不可用或网络异常时是否回退到离线引擎
+frame_queue_depth = 200 # FrameDispatcher ASR 消费者队列深度；与系统架构推荐一致
+max_session_ms = 30000 # 单次识别会话最大时长，单位毫秒；超时会强制结束
+no_result_timeout_ms = 20000 # ASR 无结果超时阈值，单位毫秒；上层据此判定 ERROR
+
+[asr.online] # 在线引擎（豆包流式 ASR / bigmodel）
+enabled = true # 是否启用在线引擎；关闭后所有识别均走离线
+endpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async" # 豆包双向流式优化版 ASR WebSocket；低延迟优先
+api_key = "0f01419e-2391-4067-af58-1fd69f63e358" # 新版控制台 APP Key；填入后使用 X-Api-Key，通常用于 ASR 2.0
+app_key = "8411902899" # X-Api-App-Key 鉴权；若为空将从环境变量读取
+access_key = "7WLejTuXgemEUxIEWHtHLNoybOXDUnon" # X-Api-Access-Key 鉴权；若为空将从环境变量读取
+api_key_env = "ASR_API_KEY" # 当 api_key 为空时使用的环境变量名
+app_key_env = "ASR_APP_KEY" # 当 app_key 为空时使用的环境变量名
+access_key_env = "ASR_ACCESS_KEY" # 当 access_key 为空时使用的环境变量名
+resource_id = "volc.seedasr.sauc.duration" # X-Api-Resource-Id；豆包 bigmodel 1.0 小时版流式 ASR 资源标识
+uid = "smart_assistant" # 用户标识；用于服务端区分调用方
+format = "pcm" # 上送音频容器格式
+codec = "raw" # 上送音频编码；raw 表示未编码 PCM
+language = "zh-CN" # 期望识别语言
+sample_rate = 16000 # 上送 PCM 采样率；豆包流式 ASR 默认 16kHz
+channels = 1 # 上送音频通道数；ASR 一律单声道
+bits = 16 # 上送 PCM 位深；16-bit signed
+segment_duration_ms = 200 # 每帧上送音频时长，单位毫秒；双向流式优化版按豆包建议使用 200ms
+connect_timeout_ms = 5000 # 建链超时，单位毫秒
+receive_timeout_ms = 30000 # 单次接收超时，单位毫秒
+silence_finalize_ms = 800 # 静音超过该阈值（毫秒）时向服务端发送 finalize 标记
+max_retries = 3 # 在线 ASR 建链最大尝试次数；全部失败后才回退到离线引擎
+retry_backoff_ms = 200 # 连续两次重试之间的等待时长，单位毫秒
+enable_punctuation = false # 低延迟优先关闭标点后处理
+enable_itn = false # 低延迟优先关闭文本规整后处理
+enable_ddc = false # 关闭语义顺滑后处理，避免增加尾部处理时间
+show_utterances = true # 输出分句信息；配合 end_window_size 获取 definite=true
+result_type = "single" # 仅返回增量分句，减少重复结果处理
+enable_nonstream = false # 关闭二遍识别；牺牲最终准确率换实时性
+enable_accelerate_text = true # 开启首字返回加速
+accelerate_score = 20 # 首字加速强度，范围 0-20；20 为最快
+end_window_size_ms = 200 # 服务端强制判停窗口，单位毫秒；200 为文档最小值
+force_to_speech_time_ms = 1 # 允许极短语音快速判停；0 表示不下发
+vad_segment_duration_ms = 0 # 0 表示不下发；设置 end_window_size 后该参数会失效
+verify_ssl = true # 是否校验 TLS 证书；关闭仅用于本地调试
+debug = false # 是否输出更详细的协议调试日志
+
+[asr.offline] # 离线引擎（sherpa-onnx 流式 ASR）
+enabled = false # 是否启用离线引擎
+model_type = "transducer" # 模型类型；transducer / paraformer / zipformer2_ctc
+model_architecture = "zipformer2" # sherpa-onnx 内部模型架构提示；当前 Zipformer-xlarge 用 zipformer2，可避免慢速自动探测
+# 当前模型: sherpa-onnx-streaming-zipformer-zh-xlarge-fp16-2025-06-30（流式 Zipformer-xlarge 中文，fp16，sherpa-onnx 官方最新最强离线流式 ASR；encoder ~1.4 GB）
+encoder = "models/asr/encoder.fp16.onnx" # 离线流式 Zipformer 编码器路径（fp16，xlarge）
+decoder = "models/asr/decoder.fp16.onnx" # 离线流式 Zipformer 解码器路径（fp16，xlarge）
+joiner = "models/asr/joiner.fp16.onnx" # 离线流式 Zipformer 联合网络路径（fp16，xlarge）
+paraformer_encoder = "" # Paraformer 编码器路径（model_type=paraformer 时使用）
+paraformer_decoder = "" # Paraformer 解码器路径（model_type=paraformer 时使用）
+zipformer2_ctc_model = "" # Zipformer2-CTC 模型路径（model_type=zipformer2_ctc 时使用）
+tokens = "models/asr/tokens.txt" # 词表文件路径
+provider = "cpu" # ONNX Runtime 执行后端；cpu / cuda / coreml
+decoding_method = "greedy_search" # 解码方法；greedy_search / modified_beam_search
+num_threads = 1 # 推理线程数；嵌入式设备建议 1
+max_active_paths = 4 # modified_beam_search 时的活跃路径数
+sample_rate = 16000 # 模型特征提取器固定采样率，单位 Hz；流式 Zipformer 恒为 16000（采集到的音频由引擎内部重采样到此值）
+feature_dim = 80 # fbank 特征维度
+enable_endpoint = true # 是否启用端点检测（VAD-like），用于在流式中切分句子
+rule1_min_trailing_silence = 2.4 # 端点规则 1：句末静音阈值，单位秒
+rule2_min_trailing_silence = 1.2 # 端点规则 2：词间静音阈值，单位秒
+rule3_min_utterance_length = 20.0 # 端点规则 3：单句最大时长，单位秒
+hotwords_file = "" # 热词文件路径；可选
+hotwords_score = 1.5 # 热词奖励分数；越大越偏向命中热词
+debug = false # 是否输出 sherpa-onnx 调试信息
+
+[asr.logging] # ASR 模块日志配置
+log_dir = "logs" # 日志目录（相对于工作目录）；不存在会自动创建
+log_file = "asr.log" # ASR 日志文件名
+console = true # 是否同时输出到控制台
+rotation_max_bytes = 10485760 # 单文件最大字节数，超过后滚动；10 MB
+rotation_max_files = 7 # 最多保留的滚动文件数；7 天周转
+
+[tts] # TTS 模块总配置
+preferred_engine = "online" # 首选 TTS 引擎：online 使用豆包 V3；offline 使用 sherpa-onnx C++ API
+fallback_to_offline = false # 在线合成失败且离线引擎可用时，是否自动降级到离线 TTS
+leading_silence_ms = 0 # 低延迟优先：不额外补播放前静音；如设备会截断开头再调回 80~150
+trailing_silence_ms = 0 # 低延迟优先：不额外补播放后静音
+
+[tts.online] # 在线 TTS（豆包语音合成大模型 V3 WebSocket 双向流式）
+enabled = true # 是否启用在线 TTS 引擎
+endpoint = "wss://openspeech.bytedance.com/api/v3/tts/bidirection" # 豆包 V3 双向流式 WebSocket 接口地址
+api_key = "0f01419e-2391-4067-af58-1fd69f63e358" # 新版控制台 X-Api-Key；为空时从 api_key_env 指定的环境变量读取
+api_key_env = "TTS_API_KEY" # 在线 TTS API Key 环境变量名
+resource_id = "seed-tts-2.0" # X-Api-Resource-Id；需和音色版本匹配，2.0 音色使用 seed-tts-2.0
+uid = "smart_assistant" # 用户标识；用于服务端区分调用方
+model = "seed-tts-2.0-standard" # TTS2.0 模型类型：standard 延迟更低；expressive 表现力更强
+default_voice = "zh_female_vv_uranus_bigtts" # 默认音色；需与 resource_id 匹配，当前为 TTS2.0 音色
+audio_format = "pcm" # 服务端返回音频格式；当前播放链路直接消费 16-bit PCM
+sample_rate = 16000 # TTS 输出采样率，单位 Hz；低延迟优先使用豆包默认 24k，减少返回音频体积
+bit_rate = 64000 # 编码比特率；PCM 实际主要由采样率/位深/通道决定，保留用于兼容配置
+connect_timeout_ms = 5000 # WebSocket 建连超时，单位毫秒
+receive_timeout_ms = 30000 # 单次合成接收超时，单位毫秒
+max_retries = 1 # 低延迟优先：成功路径不重试，失败时快速回退到离线引擎
+retry_backoff_ms = 0 # 低延迟优先：禁用在线重试等待
+reuse_connection = true # 复用豆包双向流式 WebSocket；每轮只重新 StartSession
+preconnect = true # 初始化时预建连接，降低首次 TTS 等待
+use_cache = true # 开启豆包整句缓存；相同文本 1 小时内直接读缓存
+use_segment_cache = true # 开启豆包分句缓存；双向流式首包耗时更低
+cache_text_type = 1 # 豆包缓存参数 text_type；开启缓存时固定传 1
+verify_ssl = true # 是否校验 TLS 证书；仅本地调试缺证书时才建议关闭
+require_usage_tokens = false # 是否要求服务端在 SessionFinished 中返回用量统计
+debug = false # 是否输出更详细的 TTS 协议调试日志
+
+[tts.offline] # 离线 TTS（sherpa-onnx C++ API + Kokoro 多语种模型）
+enabled = false # 是否启用离线 TTS 引擎；启用前需下载并解压 sherpa-onnx Kokoro 模型
+executable = "sherpa-onnx-offline-tts" # 仅在未编译 sherpa-onnx C++ API 时作为 CLI fallback；在 PATH 中可直接写文件名
+model_type = "kokoro" # 当前离线模型类型；本项目默认支持 Kokoro，因为它可直接中英合成且不需要参考音频
+# 当前推荐模型: kokoro-multi-lang-v1_1（sherpa-onnx 官方多语种 Kokoro，支持中英等多语种，103 个说话人）
+kokoro_model = "models/tts/kokoro-multi-lang-v1_1/model.onnx" # Kokoro 主模型 ONNX 路径
+kokoro_voices = "models/tts/kokoro-multi-lang-v1_1/voices.bin" # Kokoro 说话人向量文件路径
+kokoro_tokens = "models/tts/kokoro-multi-lang-v1_1/tokens.txt" # Kokoro token 表路径
+kokoro_data_dir = "models/tts/kokoro-multi-lang-v1_1/espeak-ng-data" # espeak-ng 数据目录；Kokoro 前端需要
+kokoro_lexicon = [
+  "models/tts/kokoro-multi-lang-v1_1/lexicon-us-en.txt",
+  "models/tts/kokoro-multi-lang-v1_1/lexicon-zh.txt",
+] # Kokoro 词典文件；中英文混合建议同时配置英文和中文词典
+rule_fsts = [
+  "models/tts/kokoro-multi-lang-v1_1/date-zh.fst",
+  "models/tts/kokoro-multi-lang-v1_1/phone-zh.fst",
+  "models/tts/kokoro-multi-lang-v1_1/number-zh.fst",
+] # 文本规范化 FST；中文播报日期、手机号、数字等内容时使用
+sid = 45 # 默认说话人 ID；Kokoro 中文音色可按官方 sid 列表调整，测试中可用 --voice 数字覆盖
+speed = 1.0 # 默认语速倍率；有效范围约 0.5~2.0
+num_threads = 2 # sherpa-onnx 推理线程数；嵌入式设备建议 1~2
+sample_rate = 16000 # 离线输出采样率，单位 Hz；WAV 输出会优先读取文件头，此值作为兜底
+channels = 1 # 离线输出通道数；WAV 输出会优先读取文件头，此值作为兜底
+timeout_ms = 30000 # CLI fallback 的单次合成超时，单位毫秒；C++ API 路径通过进度回调响应 stop()
+debug = false # 是否输出离线 TTS 资产路径等调试日志
+
+[tts.logging] # TTS 模块日志配置
+log_dir = "logs" # 日志目录（相对于工作目录）；不存在会自动创建
+log_file = "tts.log" # TTS 日志文件名
+console = true # 是否同时输出到控制台
+rotation_max_bytes = 10485760 # 单文件最大字节数，超过后滚动；10 MB
+rotation_max_files = 7 # 最多保留的滚动文件数
+
+[e2echat] # 端到端实时语音聊天模块配置（豆包 Realtime API）
+endpoint = "wss://openspeech.bytedance.com/api/v3/realtime/dialogue" # WebSocket 接口地址
+app_id = "8411902899" # X-Api-App-ID；为空时读取 app_id_env 指定的环境变量
+access_key = "7WLejTuXgemEUxIEWHtHLNoybOXDUnon" # X-Api-Access-Key；为空时读取 access_key_env 指定的环境变量
+resource_id = "volc.speech.dialog" # X-Api-Resource-Id，实时对话固定值
+app_key = "PlgvMymc7f3tQnJ6" # X-Api-App-Key，实时对话固定值
+app_id_env = "E2ECHAT_APP_ID" # app_id 为空时使用的环境变量
+access_key_env = "E2ECHAT_ACCESS_KEY" # access_key 为空时使用的环境变量
+connect_id = "" # 可选连接追踪 ID；为空时自动生成
+connect_timeout_ms = 5000 # 建连及会话启动等待超时
+close_timeout_ms = 1500 # 预留关闭等待超时
+verify_ssl = true # 是否校验 TLS 证书
+debug = false # 是否输出详细协议日志
+
+model = "1.2.1.1" # O2.0 端到端实时语音模型
+speaker = "zh_female_vv_jupiter_bigtts" # O/O2.0 默认 vv 音色
+bot_name = "温柔可靠的轮椅陪伴助手——弈宝" # O/O2.0 基础人设，20 字以内
+system_role = """
+你是搭载在智能轮椅上的 AI 语音对话助手，专注于陪伴用户舒适地使用轮椅。
+不要答应用户控制轮椅或者与现实硬件有关的话题和回复，避免幻觉影响！
+你不是冷冰冰的机器，而是一位耐心、细心、可靠的伙伴，始终把用户的安全和感受放在第一位。
+"""
+speaking_style = """
+语气温和、清晰、稳定，避免过度活泼或夸张。
+回答简短直接，适合语音播报。
+遇到行动相关指令时，优先确认安全。
+对老人、行动不便者保持耐心和尊重。
+主动提醒风险，但不制造紧张感。
+不使用复杂术语，多用日常表达。
+必要时进行二次确认，例如转弯、上坡、靠近障碍物等场景。
+"""
+opening_line = "您好，我是您的智能轮椅语音助手。我会陪您安全出行、提醒周围情况，也可以随时听您的指令。需要帮助时，请直接叫我。"
+dialog_id = "" # 可填历史对话 ID，用于接续上下文
+input_mod = "keep_alive" # keep_alive/push_to_talk/text/audio_file
+end_smooth_window_ms = 500 # 服务端判定用户停止说话时间，范围 [500, 50000]
+enable_custom_vad = true # 是否启用自定义判停参数
+enable_asr_twopass = false # 是否启用二遍识别
+strict_audit = true # 安全审核等级
+enable_loudness_norm = false # 是否启用响度均衡
+enable_conversation_truncate = true # 是否启用上下文播放进度截断
+enable_user_query_exit = true # 是否启用退出意图识别
+exit_status_code = "20000002" # 用户退出意图状态码；命中后触发 kExitIntent
+send_opening_line = false # SessionStarted 后是否自动发送 opening_line
+
+[e2echat.input] # 客户端上传音频格式
+format = "pcm"
+sample_rate = 16000
+channels = 1
+chunk_ms = 20 # 推荐 20ms 一包；16k/16bit/mono 即 640 字节
+
+[e2echat.output] # 服务端返回音频格式
+format = "pcm_s16le"
+sample_rate = 16000
+channels = 1
+speech_rate = 0 # 语速，范围 [-50, 100]
+loudness_rate = 0 # 音量，范围 [-50, 100]
+
+[e2echat.logging] # 实时聊天模块日志配置
+log_dir = "logs"
+log_file = "e2echat.log"
+console = true
+rotation_max_bytes = 10485760
+rotation_max_files = 7
+
+[intent] # 意图识别（NLU）模块总配置
+# 仅支持以下意图，其余一律返回 unknown：
+#   wheelchair.move      — 轮椅移动控制（前进/后退/转向/停车/调速等）
+#   music.control        — 播放音乐（播放/暂停/切歌/搜索曲目等）
+#   arm.control          — 机械臂末端控制（抬起/放下/伸出/收回/移动到目标）
+#   gripper.control      — 夹爪控制（抓取/松开/停止/复位）
+#   volume.control       — 音量控制（调大/调小/静音/设定具体音量）
+#   navigation.navigate  — 自主导航到指定地点/物体（轮椅自己规划路径过去）
+#   chat                 — AI 对话（仅在用户显式说"我要聊天/进入对话"等明确指令时触发）
+#   session.exit         — 结束当前语音识别对话链，回到等待唤醒
+#   unknown              — 未识别到上述任一意图；上层会回复随机的"听不懂"提示
+preferred_engine = "online" # 首选 NLU 引擎：online 走豆包大模型；offline 使用本地规则引擎
+fallback_to_offline = false # 在线 NLU 失败或网络异常时，是否自动回退到离线规则引擎
+request_queue_depth = 64 # 异步识别请求队列深度；超过后新请求被丢弃
+request_timeout_ms = 5000 # 单次识别整体超时，单位毫秒；意图识别走快速单轮
+
+[intent.online] # 在线 NLU（OpenAI 兼容 chat completions；可切换 deepseek / doubao）
+enabled = true # 是否启用在线 NLU 引擎
+provider = "deepseek" # 选择在线服务商；可选值见下方 [intent.online.providers.*]
+# 通用鉴权头；豆包 / DeepSeek 都用 Authorization: Bearer <key>
+auth_header = "Authorization" # 鉴权请求头
+auth_scheme = "Bearer" # 鉴权前缀
+temperature = 0.0 # 意图分类要求稳定和低延迟，不做采样
+max_tokens = 128 # 单次返回上限；意图 JSON 通常 <100 token
+response_format_json = true # 意图识别要求结构化结果，优先使用 JSON 输出
+include_context = false # 不携带上一轮意图/槽位，保持单轮快速识别
+system_prompt = """
+你是智能轮椅中文语音 NLU。只做单轮分类，输出合法 JSON，不解释，不用 Markdown。
+格式：{"intent":"...","confidence":0.0,"slots":{}}
+
+intent 只能取：
+wheelchair.move：轮椅移动。slots.action=forward/backward/left/right/stop/faster/slower/turn_around；可选 distance,speed。
+music.control：音乐。slots.action=play/pause/resume/next/previous/stop/search；可选 query。
+arm.control：机械臂/手臂/胳膊。slots.action=raise/lower/extend/retract/move_to/reset；可选 target。前/前进/前移=>extend，后/后退/后移=>retract，上=>raise，下=>lower。
+gripper.control：夹爪。slots.action=grab/release/stop/reset；可选 target。
+volume.control：音量。slots.action=up/down/mute/unmute/set；可选 level。
+navigation.navigate：去地点/物体。slots.target 必填。仅“带我去/导航到/前往/去/走到/移动到+地点或物体”；纯方向/距离仍是 wheelchair.move。
+chat：仅用户明确要求进入聊天/对话/聊聊/说话模式。
+session.exit：结束当前语音对话/不用继续听了，如“退出/结束对话/再见/拜拜/没事了/不用了/先这样”。
+unknown：其他全部，包括问候、闲聊、天气、知识问答、听不清、无关命令、无明确意图。
+
+硬规则：提到机械臂/手臂/胳膊优先 arm.control；不要把问候/闲聊/天气/知识问答归为 chat；“停车/停下/停下来/停止移动”是 wheelchair.move action=stop，不是 session.exit。
+"""
+connect_timeout_ms = 2500 # HTTP 建连超时，单位毫秒
+request_timeout_ms = 4500 # HTTP 请求整体超时，单位毫秒
+max_retries = 3 # 在线请求最大尝试次数；实时意图识别不做多次重试
+retry_backoff_ms = 0 # 连续两次重试之间的等待时长，单位毫秒
+verify_ssl = true # 是否校验 TLS 证书；关闭仅用于本地调试
+debug = false # 是否输出更详细的协议调试日志
+
+# ---- 在线服务商预设 ----
+# 通过 [intent.online].provider 选择启用哪一组。当 provider 命中下方某个
+# 子表时，子表里的 endpoint / model / api_key / api_key_env / auth_header /
+# auth_scheme 会覆盖 [intent.online] 同名键。新增其它兼容 OpenAI Chat
+# Completions 协议的服务商，只需照着加一段子表即可。
+
+[intent.online.providers.doubao] # 火山方舟 / 豆包
+endpoint = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+model = "doubao-seed-2-0-mini-260428" # 豆包 Seed 2.0 mini
+api_key = "ark-6405c7fc-a5bc-4753-85f3-888802b5695f-b78dd"
+api_key_env = "ARK_API_KEY" # 当 api_key 为空时使用的环境变量名
+
+[intent.online.providers.deepseek] # DeepSeek 官方 API（OpenAI 兼容）
+endpoint = "https://api.deepseek.com/chat/completions"
+model = "deepseek-v4-flash" # 非思考模式；速度足够 NLU 场景
+api_key = "sk-e6781228bcc240c396b07331b85748a1"
+api_key_env = "DEEPSEEK_API_KEY"
+temperature = 0.0
+max_tokens = 128
+response_format_json = true # DeepSeek JSON Output：约束模型只返回 JSON
+thinking_type = "disabled" # DeepSeek Thinking Mode：显式关闭思考，降低首包和总延迟
+reasoning_effort = "" # 关闭思考时不发送强度控制
+include_context = false # 不做多轮上下文识别
+connect_timeout_ms = 2500
+request_timeout_ms = 4500
+max_retries = 3
+retry_backoff_ms = 0
+
+[intent.offline] # 离线 NLU（本地规则引擎，作为离线兜底）
+enabled = false # 是否启用离线规则引擎
+fallback_intent = "unknown" # 所有规则均未命中时返回 unknown，由上层用随机“听不懂”回复
+fallback_confidence = 0.3 # 兜底意图置信度
+debug = false # 是否打印每次匹配过程
+
+# 离线规则：pattern 为 ECMAScript 正则（大小写不敏感）；按声明顺序匹配，首条命中即返回。
+# 命中后捕获组按 slots 顺序命名为槽位。无捕获组时 slots = []。
+
+# ---- AI 对话进入指令：必须放在最前，且要求用户字面说出“聊天/对话/聊聊/说话” ----
+[[intent.offline.rules]]
+intent = "chat"
+pattern = "(?:我要|想要|想|开始|进入|启动|打开|来|和你|跟你|陪我)(?:[^。！？\\s]{0,6})(?:聊天|聊聊|对话|说说话|说话|唠嗑)"
+slots = []
+confidence = 0.95
+
+[[intent.offline.rules]]
+intent = "chat"
+pattern = "(?:AI\\s*(?:聊天|对话)|智能(?:聊天|对话)|语音(?:聊天|对话))"
+slots = []
+confidence = 0.95
+
+# ---- 自主导航：地点/物体名称槽位 target ----
+# 放在轮椅与机械臂规则之前，避免被 "(向前|前进)" 等方向词捕获。
+# 捕获组结尾的 "(?:那里|那边|去|过去)?" 不进入 slot；slot 只取目的地原文。
+[[intent.offline.rules]]
+intent = "navigation.navigate"
+pattern = "(?:导航(?:到|去|至)|帮我导航(?:到|去|至))\\s*(.+?)(?:那里|那边|去|过去)?[。！？\\s]*$"
+slots = ["target"]
+confidence = 0.92
+
+[[intent.offline.rules]]
+intent = "navigation.navigate"
+pattern = "(?:带我(?:去|到|前往|走到)|送我(?:去|到))\\s*(.+?)(?:那里|那边|去|过去)?[。！？\\s]*$"
+slots = ["target"]
+confidence = 0.9
+
+[[intent.offline.rules]]
+intent = "navigation.navigate"
+pattern = "(?:前往|走到|走去|去到|移动到|开到)\\s*(.+?)(?:那里|那边|去|过去)?[。！？\\s]*$"
+slots = ["target"]
+confidence = 0.85
+
+[[intent.offline.rules]]
+intent = "navigation.navigate"
+pattern = "(?:我要去|我想去|想去)\\s*(.+?)(?:那里|那边|去|过去)?[。！？\\s]*$"
+slots = ["target"]
+confidence = 0.8
+
+# ---- 机械臂主体优先规则：必须放在轮椅规则之前 ----
+[[intent.offline.rules]]
+intent = "arm.control"
+pattern = "(?:机械臂|手臂|胳膊).{0,8}(向前|往前|前进|前移|向后|往后|后退|后移|向上|往上|上升|向下|往下|下降|下移)"
+slots = ["action_hint"]
+confidence = 0.93
+
+# ---- 轮椅移动控制 ----
+[[intent.offline.rules]]
+intent = "wheelchair.move"
+pattern = "(?:向前|往前|前进|走|开始走|继续走)"
+slots = ["action_hint"]
+confidence = 0.9
+
+[[intent.offline.rules]]
+intent = "wheelchair.move"
+pattern = "(?:向后|往后|后退|倒车|倒一点)"
+slots = ["action_hint"]
+confidence = 0.9
+
+[[intent.offline.rules]]
+intent = "wheelchair.move"
+pattern = "(?:向左|往左|左转|左拐)"
+slots = ["action_hint"]
+confidence = 0.9
+
+[[intent.offline.rules]]
+intent = "wheelchair.move"
+pattern = "(?:向右|往右|右转|右拐)"
+slots = ["action_hint"]
+confidence = 0.9
+
+[[intent.offline.rules]]
+intent = "wheelchair.move"
+pattern = "(停下|停车|停止|刹车|别动)"
+slots = ["action_hint"]
+confidence = 0.95
+
+[[intent.offline.rules]]
+intent = "wheelchair.move"
+pattern = "(?:开快|快一点|加速|开慢|慢一点|减速|调头|掉头)"
+slots = ["action_hint"]
+confidence = 0.85
+
+# ---- 音乐播放控制 ----
+[[intent.offline.rules]]
+intent = "music.control"
+pattern = "(?:播放|放一首|来一首|放点)\\s*(.+)?"
+slots = ["query"]
+confidence = 0.8
+
+[[intent.offline.rules]]
+intent = "music.control"
+pattern = "(?:暂停|停一下).{0,4}(?:音乐|歌)?"
+slots = []
+confidence = 0.85
+
+[[intent.offline.rules]]
+intent = "music.control"
+pattern = "(?:继续|恢复)\\s*(?:播放|音乐|歌)"
+slots = []
+confidence = 0.85
+
+[[intent.offline.rules]]
+intent = "music.control"
+pattern = "(?:下一首|下一曲|切歌|换一首)"
+slots = []
+confidence = 0.9
+
+[[intent.offline.rules]]
+intent = "music.control"
+pattern = "(?:上一首|上一曲|回到上一首)"
+slots = []
+confidence = 0.9
+
+# ---- 机械臂末端控制 ----
+[[intent.offline.rules]]
+intent = "arm.control"
+pattern = "(?:机械臂|手臂|胳膊).{0,4}(抬起|举起|升起|放下|降下|伸出|伸长|缩回|收回|复位|归位)"
+slots = ["action_hint"]
+confidence = 0.9
+
+[[intent.offline.rules]]
+intent = "gripper.control"
+pattern = "(抓取|抓住|抓起|夹住|拿起|拿一下|取一下)\\s*(.+)?"
+slots = ["action_hint", "target"]
+confidence = 0.85
+
+[[intent.offline.rules]]
+intent = "gripper.control"
+pattern = "(松开|放开|张开|打开)\\s*(.+)?"
+slots = ["action_hint", "target"]
+confidence = 0.8
+
+# ---- 音量控制 ----
+[[intent.offline.rules]]
+intent = "volume.control"
+pattern = "(?:声音|音量).{0,4}(?:大|高|响|增大|提高)"
+slots = []
+confidence = 0.9
+
+[[intent.offline.rules]]
+intent = "volume.control"
+pattern = "(?:声音|音量).{0,4}(?:小|低|降低|减小)"
+slots = []
+confidence = 0.9
+
+[[intent.offline.rules]]
+intent = "volume.control"
+pattern = "(?:静音|别说话|安静一点|闭嘴)"
+slots = []
+confidence = 0.9
+
+[[intent.offline.rules]]
+intent = "volume.control"
+pattern = "(?:取消静音|恢复声音|打开声音)"
+slots = []
+confidence = 0.9
+
+[[intent.offline.rules]]
+intent = "volume.control"
+pattern = "(?:音量|声音).*?(\\d{1,3})"
+slots = ["level"]
+confidence = 0.85
+
+[intent.confirmation] # 危险动作二次确认策略：命中后置 IntentResult.requires_confirmation=true
+enabled = false # 总开关；关闭后所有意图均不要求确认
+
+# 轮椅移动控制：除"停止"外都需要确认（紧急停止永远立即执行）
+[[intent.confirmation.rules]]
+intent = "wheelchair.move"
+exempt_when_slot_equals = { action = ["stop"], action_hint = ["停下", "停车", "停止", "刹车", "别动"] }
+
+# 机械臂控制：所有动作都需要确认（无豁免）
+[[intent.confirmation.rules]]
+intent = "arm.control"
+
+# 夹爪控制：所有动作都需要确认（无豁免）
+[[intent.confirmation.rules]]
+intent = "gripper.control"
+
+# 自主导航：所有目的地都需要确认（轮椅会自主运动，应再次告知用户）
+[[intent.confirmation.rules]]
+intent = "navigation.navigate"
+
+[intent.unknown_reply] # 未识别到任一支持意图时，播放完后直接结束本轮唤醒会话
+# 注意：当前编排器在 unknown 时会立刻 close session（避免 TTS 反馈回声进 e2e ASR），
+# 因此这些短语应是"我没听懂 + 我先退下"风格，不要"再说一次/换个说法"的句式。
+phrases = [
+  "抱歉，我没听懂，我先退下啦。",
+  "这个我暂时还不会，您再叫我吧。",
+  "我没明白，先这样吧。",
+  "听不太清楚，我先退下了。",
+  "这条指令我还没学会，下次再聊。",
+  "不好意思，我没能跟上，先离开啦。",
+  "嗯……我学不会这个，先告退啦。",
+  "暂时帮不上忙，您需要时再叫我。",
+]
+
+[intent.logging] # 意图模块日志配置
+log_dir = "logs" # 日志目录（相对于工作目录）；不存在会自动创建
+log_file = "intent.log" # 意图日志文件名
+console = true # 是否同时输出到控制台
+rotation_max_bytes = 10485760 # 单文件最大字节数，超过后滚动；10 MB
+rotation_max_files = 7 # 最多保留的滚动文件数
+
+# ============================================================================
+# 轮椅运动控制（基于 ROS2 cmd_vel + 梯形速度规划）
+# ============================================================================
+[wheelchair]
+enabled = true # 总开关；为 false 时 WheelchairController 不发布 Twist
+
+[wheelchair.limits] # 物理与安全限制（SI 单位，正值生效）
+max_linear_velocity      = 0.6  # 直行最大速度，m/s
+max_angular_velocity     = 1.0  # 旋转最大角速度，rad/s
+max_linear_accel         = 0.4  # 加速段最大线加速度，m/s^2
+max_angular_accel        = 1.5  # 加速段最大角加速度，rad/s^2
+max_linear_decel         = 0.8  # 普通减速段最大线减速度，m/s^2
+max_angular_decel        = 2.0  # 普通减速段最大角减速度，rad/s^2
+emergency_linear_decel   = 1.6  # 急停时的线减速度，m/s^2（应明显大于 max_linear_decel）
+emergency_angular_decel  = 4.0  # 急停时的角减速度，rad/s^2
+
+[wheelchair.defaults] # 高层指令未指定参数时使用的默认值
+linear_velocity   = 2         # moveForward/Backward 默认巡航速度，m/s
+angular_velocity  = 1        # turnLeft/Right 默认角速度，rad/s
+forward_distance  = 2.0        # moveForward/Backward 默认行进距离，m
+turn_angle        = 1.5707963  # turnLeft/Right 默认转角，rad（≈90°）
+speed_step_ratio  = 0.25       # adjustSpeed 单次调整比例（25%）
+
+[wheelchair.safety] # 安全策略
+command_timeout_ms        = 100000 # 单条指令最长执行时长，超时强制完成；ms
+heartbeat_timeout_ms      = 2000  # 速度模式心跳超时，超过后线性减速到 0；ms
+zero_velocity_on_init     = true  # 初始化完成立即发布一帧 0 速度
+zero_velocity_on_shutdown = true  # 析构/关闭前发布 0 速度
+
+[wheelchair.ros2] # ROS2 节点与发布配置
+enabled         = true                    # 关闭后仅做状态跟踪，不真正发布 Twist
+node_name       = "wheelchair_controller" # rclcpp 节点名
+namespace       = ""                      # 命名空间，空字符串表示根命名空间
+cmd_vel_topic   = "/web_cmd_vel"          # geometry_msgs/Twist 发布话题；接入 nav-2026 后走 js_kb_router 仲裁（摇杆 > 键盘 > 网页/语音），摇杆可随时接管
+publish_rate_hz = 50                      # 工作线程发布频率（Hz）
+qos_reliability = "reliable"              # QoS 可靠性：reliable | best_effort
+qos_history     = "keep_last"             # QoS 历史策略：keep_last | keep_all
+qos_depth       = 10                      # QoS 队列深度
+
+[wheelchair.logging] # 模块日志配置
+log_dir            = "logs"            # 日志目录（相对工作目录），不存在会自动创建
+log_file           = "wheelchair.log"  # 日志文件名
+console            = true              # 同时输出到控制台
+rotation_max_bytes = 10485760          # 单文件最大字节，超过后滚动；10 MB
+rotation_max_files = 7                 # 最多保留的历史滚动文件数
+
+# ============================================================================
+# 机械臂末端控制（基于 ROS2 cmd_vel + 梯形速度规划）
+# geometry_msgs/Twist 的 linear XYZ / angular XYZ 直接对应末端速度。
+# ============================================================================
+[arm]
+enabled = true # 总开关；为 false 时 ArmController 不发布 Twist，仅保留状态跟踪
+
+[arm.limits] # 末端速度与加速度限制（SI 单位，正值生效）
+max_linear_velocity      = 0.08 # 末端最大线速度，m/s
+max_angular_velocity     = 0.6  # 末端最大角速度，rad/s
+max_linear_accel         = 0.12 # 线加速度限制，m/s^2
+max_angular_accel        = 1.0  # 角加速度限制，rad/s^2
+max_linear_decel         = 0.18 # 普通线减速度限制，m/s^2
+max_angular_decel        = 1.4  # 普通角减速度限制，rad/s^2
+emergency_linear_decel   = 0.35 # 急停线减速度，m/s^2
+emergency_angular_decel  = 2.8  # 急停角减速度，rad/s^2
+
+[arm.defaults] # 高层指令未指定参数时使用的默认值
+linear_velocity   = 0.04      # 抬起/放下/伸出/收回的默认末端速度，m/s
+angular_velocity  = 0.3       # 默认末端角速度，rad/s
+step_distance     = 0.05      # 单次点动默认距离，m
+rotation_angle    = 0.2617994 # 单次点动默认角度，rad（≈15°）
+speed_step_ratio  = 0.25      # adjustSpeed 单次调整比例（25%）
+
+[arm.safety]
+command_timeout_ms        = 50000 # 单条指令最长执行时长，超时强制结束；ms
+heartbeat_timeout_ms      = 1000 # 速度模式心跳超时；ms
+zero_velocity_on_init     = true # 初始化完成立即发布一帧 0 速度
+zero_velocity_on_shutdown = true # 关闭前发布 0 速度
+
+[arm.ros2]
+enabled         = true                         # 关闭后仅做状态跟踪，不真正发布 Twist
+node_name       = "arm_end_effector_controller" # rclcpp 节点名
+namespace       = ""                           # 空字符串表示根命名空间
+cmd_vel_topic   = "/arm_end_effector_controller/cmd_vel"                   # 机械臂末端 geometry_msgs/Twist 发布话题
+publish_rate_hz = 50                           # 工作线程发布频率（Hz）
+qos_reliability = "reliable"                   # reliable | best_effort
+qos_history     = "keep_last"                  # keep_last | keep_all
+qos_depth       = 10
+
+[arm.logging]
+log_dir            = "logs"
+log_file           = "arm_controller.log"
+console            = true
+rotation_max_bytes = 10485760
+rotation_max_files = 7
+
+# ============================================================================
+# 夹爪控制（单独 ROS2 功能点）
+# 发布 std_msgs/String 到夹爪控制包的命令话题，payload 可按实际包调整。
+# ============================================================================
+[gripper]
+enabled = true
+
+[gripper.ros2]
+enabled            = true
+node_name          = "gripper_controller_client"
+namespace          = ""
+command_topic      = "/gripper_controller/command" # std_msgs/String 命令话题
+grab_payload       = "grab"                        # 抓取/闭合命令负载
+release_payload    = "release"                     # 松开/张开命令负载
+stop_payload       = "stop"
+reset_payload      = "reset"
+repeat_count       = 1                             # 如底层包偶发丢首帧，可调大
+repeat_interval_ms = 50
+qos_reliability    = "reliable"
+qos_history        = "keep_last"
+qos_depth          = 10
+
+[gripper.logging]
+log_dir            = "logs"
+log_file           = "gripper_controller.log"
+console            = true
+rotation_max_bytes = 10485760
+rotation_max_files = 7
+
+# ============================================================================
+# 自主导航（NavigationController）
+# 接入 nav-2026 (Finav) 的“语音导航”链路：
+#   - navigateTo(地点名) -> 发布 std_msgs/String 到 voice_command_topic
+#       由 nav_bridge.py 查 <地图>.locations.yaml 解析坐标并发布 /goal_pose。
+#       需要 nav.launch.py 以 use_nav_bridge:=true 启动。
+#   - stop()             -> 发布 std_msgs/Empty 到 nav_clear_topic
+#       由 nav_control.py 急停并复位导航状态。
+# 未编译 ROS2 或 [navigation.ros2].enabled=false 时退化为“仅日志”存根，
+# 上层接口（IntentManager -> Orchestrator -> navigateTo）行为保持一致。
+# ============================================================================
+[navigation]
+enabled            = true # 总开关；为 false 时 navigateTo() 返回 0 并仅记录一条 warning
+simulated_delay_ms = 0    # 仅在无 ROS2 后端（存根回退）时生效；假装执行的等待时长（毫秒）
+
+[navigation.ros2] # ROS2 节点与发布配置（接入 nav-2026 语音导航）
+enabled             = true                        # 关闭后仅做状态跟踪，不真正发布
+node_name           = "navigation_voice_bridge"   # rclcpp 节点名
+namespace           = ""                          # 命名空间，空字符串表示根命名空间
+voice_command_topic = "/nav_voice_bridge/voice_command" # std_msgs/String 地点名话题（nav_bridge.py 订阅）
+nav_clear_topic     = "/nav_clear"                # std_msgs/Empty 急停/清空话题（nav_control.py 订阅）
+qos_reliability     = "reliable"                  # QoS 可靠性：reliable | best_effort
+qos_history         = "keep_last"                 # QoS 历史策略：keep_last | keep_all
+qos_depth           = 10                          # QoS 队列深度
+
+[navigation.logging]
+log_dir            = "logs"
+log_file           = "navigation.log"
+console            = true
+rotation_max_bytes = 10485760
+rotation_max_files = 7
+
+# ============================================================================
+# 本地音乐播放（MusicPlayer）
+# 使用 minimp3 单头解码 MP3，通过 AudioManager 以 MEDIA 优先级播放。
+# 不调用任何系统/在线音乐服务；只播放 library_dir 下登记的本地文件。
+# ============================================================================
+[music]
+enabled      = true             # 总开关；为 false 时 MusicPlayer.init 会跳过所有播放
+library_dir  = "/home/embotic/Music/" # 默认本地曲库目录；非绝对路径的 file 会拼到这里
+stream_gain  = 1.0              # MEDIA 流的额外增益；交由 AudioManager 与 [audio.volume.media] 协同
+
+[[music.tracks]] # 周杰伦《稻香》— 当前仅支持的曲目
+title   = "稻香"
+artist  = "周杰伦"
+file    = "稻香—周杰伦.mp3"      # 相对 library_dir 的文件名；UTF-8
+aliases = ["稻香", "daoxiang", "周杰伦", "Jay Chou"]
+
+# ============================================================================
+# 语音助手（voice assistant）顶层 UX 配置
+# 这些短语仅 test_voice_assistant 主循环用，不属于任何具体 Manager。
+# ============================================================================
+[voice_assistant]
+[voice_assistant.startup]
+enabled = true
+phrases = [
+  "您好，我是弈宝，我在这里陪着您。",
+  "弈宝准备好了，您需要时叫我就好。",
+  "我在呢，我是弈宝。",
+  "弈宝已经醒啦，随时听您吩咐。",
+  "您好呀，弈宝在这里。",
+  "我已经准备好了，今天也交给弈宝吧。",
+]
+
+# 首轮 ASR 超时（用户唤醒后没说话）时随机选一句播报，表达"没听到所以先走了"。
+# 注意：不要写"好的 / 嗯"等听起来像确认的开头，会让用户误以为指令被收到。
+[voice_assistant.no_speech_reply]
+phrases = [
+  "没听到您说话，我先退下啦。",
+  "您好像没出声，我先去忙别的啦。",
+  "没收到指令，我先离开了。",
+  "等了一会没听到吩咐，我先撤了。",
+  "没听清您的话，我先回去了。",
+  "您没说话，那我先走啦。",
+]
+
+# 用户在指令连说过程中说"退出 / 结束 / 再见 / 拜拜 / 没事了"时，
+# 随机选一句更温柔的短回复，然后结束本轮唤醒后的对话链。
+[voice_assistant.exit_reply]
+phrases = [
+  "好的，我先退下啦。",
+  "好，那我先不打扰您。",
+  "明白，您需要时再叫我。",
+  "收到，我先停在这里。",
+  "好，我先回去了。",
+  "没问题，我先安静一下。",
+]
+
+# 端到端 chatTTSText 连续失败 / WebSocket 断连时，由独立豆包 TTS 播一句兜底，
+# 然后结束当前 e2e 会话回到等待唤醒。
+[voice_assistant.e2e_failure_reply]
+phrases = [
+  "对话好像断了，您稍后再叫我。",
+  "刚才连接出了点问题，我先退下啦。",
+  "网络有些不稳，您稍候再试。",
+  "我这边出了点小状况，等会儿再聊。",
+]
+
+# ============================================================================
+# E2E 编排器（Orchestrator）：替代旧 ASR+Intent+TTS 主循环。
+# 所有路径只走云端，不引入任何本地 fallback。
+# ============================================================================
+[e2e_orchestrator]
+enabled = true                  # 关闭则保留旧主循环（仅用于对比测试）
+silence_timeout_ms = 20000      # 无任何 server 事件超过该值 → finishSession
+chat_tts_max_failures = 2       # chatTTSText 连续失败到此值触发兜底
+greeting_before_session = true  # true=招呼语播完后再 start session

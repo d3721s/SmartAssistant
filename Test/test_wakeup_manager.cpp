@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
@@ -24,6 +25,13 @@
 using namespace std::chrono_literals;
 
 namespace {
+
+std::atomic<bool> g_stop{false};
+
+void onSignal(int)
+{
+    g_stop.store(true, std::memory_order_release);
+}
 
 bool fileExists(const std::string& path)
 {
@@ -206,6 +214,9 @@ bool requiredWakeupFilesExist(const wakeup::WakeupConfig& cfg)
 
 int main()
 {
+    std::signal(SIGINT, onSignal);
+    std::signal(SIGTERM, onSignal);
+
     quill::Logger* logger = testLogger();
     TestRunner runner(logger);
 
@@ -221,6 +232,8 @@ int main()
         runner.expect(wake_cfg.sample_rate > 0, "wakeup sample rate is valid");
         runner.expect(wake_cfg.frame_queue_depth > 0, "frame queue depth is valid");
         runner.expect(wake_cfg.cooldown_ms >= 0, "cooldown is non-negative");
+        runner.expect(wake_cfg.tts_ack.phrases.size() == 10,
+                      "wake TTS ack phrase list is configured");
 
         runner.expect(fileExists(wake_cfg.kws.encoder), "KWS encoder model exists");
         runner.expect(fileExists(wake_cfg.kws.decoder), "KWS decoder model exists");
@@ -278,6 +291,9 @@ int main()
         cfg.sv.enabled = false;
         cfg.mute_on_init = true;
         cfg.logging.log_file = "wakeup_manager_test.log";
+        if (envEnabled("WAKEUP_TEST_DISABLE_TTS_ACK")) {
+            cfg.tts_ack.enabled = false;
+        }
 
         wakeup::WakeupManager wk;
         std::atomic<int> callback_count{0};
@@ -332,7 +348,14 @@ int main()
         wakeup::WakeupManager wk;
         std::atomic<int> wake_events{0};
 
-        const bool wake_init_ok = wk.init(&am, cfg_path);
+        bool wake_init_ok = false;
+        if (envEnabled("WAKEUP_TEST_DISABLE_TTS_ACK")) {
+            wakeup::WakeupConfig cfg = wake_cfg;
+            cfg.tts_ack.enabled = false;
+            wake_init_ok = wk.init(&am, cfg);
+        } else {
+            wake_init_ok = wk.init(&am, cfg_path);
+        }
         runner.expect(wake_init_ok, "WakeupManager::init succeeds after capture starts");
         if (!wake_init_ok) {
             am.stopCapture();
@@ -357,8 +380,32 @@ int main()
 
         wk.muteWakeup(false);
         runner.expect(!wk.isMuted(), "dialog unmute turns wakeup back on");
-        const int capture_ms = envInt("WAKEUP_TEST_CAPTURE_MS", 500, 0, 5000);
-        std::this_thread::sleep_for(std::chrono::milliseconds(capture_ms));
+        const bool fast_mode = envEnabled("WAKEUP_TEST_FAST");
+        const bool forever = !fast_mode &&
+            !std::getenv("WAKEUP_TEST_CAPTURE_MS");
+        const int capture_ms = fast_mode
+            ? envInt("WAKEUP_TEST_CAPTURE_MS", 500, 0, 5000)
+            : envInt("WAKEUP_TEST_CAPTURE_MS", 0, 0, 10 * 60 * 1000);
+        if (forever) {
+            std::cout << "[WAKEUP] Listening continuously. Speak the configured "
+                         "wake word; press Ctrl+C to stop.\n";
+        } else if (!fast_mode) {
+            std::cout << "[WAKEUP] Listening for " << capture_ms
+                      << " ms. Speak the configured wake word now.\n";
+        }
+        const auto listen_deadline = std::chrono::steady_clock::now() +
+            std::chrono::milliseconds(capture_ms);
+        int last_reported_events = -1;
+        while (!g_stop.load(std::memory_order_acquire) &&
+               (forever || std::chrono::steady_clock::now() < listen_deadline)) {
+            const int current_events = wake_events.load(std::memory_order_relaxed);
+            if (!fast_mode && current_events != last_reported_events) {
+                last_reported_events = current_events;
+                std::cout << "[WAKEUP] callbacks observed: "
+                          << current_events << "\n";
+            }
+            std::this_thread::sleep_for(100ms);
+        }
 
         if (wk.config().sv.enabled) {
             const int dim = wk.embeddingDim();

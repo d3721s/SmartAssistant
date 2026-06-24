@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -27,6 +28,7 @@
 #include <sherpa-onnx/c-api/c-api.h>
 
 #include "AudioManager.h"
+#include "TTSManager.h"
 
 namespace wakeup {
 
@@ -120,6 +122,13 @@ struct WakeupManager::Impl {
     WakeCallback               wake_cb;
     std::mutex                 wake_cb_mtx;
 
+    // Optional borrowed TTS manager. WakeupManager only triggers an async
+    // acknowledgement; ownership and lifecycle stay with the application.
+    tts::TTSManager*           tts_manager = nullptr;
+    std::unique_ptr<tts::TTSManager> owned_tts_manager;
+    std::mutex                 tts_mtx;
+    std::mt19937               ack_rng{std::random_device{}()};
+
     // State flags.
     std::atomic<bool>          listening{false};
     std::atomic<bool>          muted{false};
@@ -149,6 +158,8 @@ struct WakeupManager::Impl {
                         int channels);
     void feedKws(const std::vector<float>& mono, int sample_rate);
     void resetKwsStream();
+    void playWakeAckAsync(const WakeupEvent& ev);
+    std::string pickWakeAckPhrase();
 
     // ------------------------------------------------------------------------
     // SV evaluation
@@ -318,6 +329,53 @@ void WakeupManager::Impl::resetKwsStream() {
     }
 }
 
+std::string WakeupManager::Impl::pickWakeAckPhrase() {
+    if (cfg.tts_ack.phrases.empty()) {
+        return {};
+    }
+    std::uniform_int_distribution<std::size_t> dist(0, cfg.tts_ack.phrases.size() - 1);
+    return cfg.tts_ack.phrases[dist(ack_rng)];
+}
+
+void WakeupManager::Impl::playWakeAckAsync(const WakeupEvent& ev) {
+    if (!cfg.tts_ack.enabled || !ev.sv_passed) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lk(tts_mtx);
+    if (!tts_manager) {
+        return;
+    }
+    const std::string phrase = pickWakeAckPhrase();
+    if (phrase.empty()) {
+        return;
+    }
+
+    tts::TTSOptions opts;
+    opts.voice    = cfg.tts_ack.voice.empty() ? opts.voice : cfg.tts_ack.voice;
+    opts.language = cfg.tts_ack.language;
+    opts.speed    = cfg.tts_ack.speed;
+    opts.volume   = cfg.tts_ack.volume;
+
+    LOG_INFO(logger, "playing wake TTS ack: '{}'", phrase);
+    const bool started = tts_manager->synthesizeAndPlay(
+        phrase, opts,
+        [logger = logger, phrase](const tts::TTSResult& result) {
+            if (!logger) {
+                return;
+            }
+            if (result.success) {
+                LOG_INFO(logger, "wake TTS ack completed: '{}'", phrase);
+            } else {
+                LOG_WARNING(logger, "wake TTS ack failed: '{}' code={} message={}",
+                            phrase, static_cast<int>(result.code), result.message);
+            }
+        });
+    if (!started) {
+        LOG_WARNING(logger, "wake TTS ack start rejected: '{}'", phrase);
+    }
+}
+
 void WakeupManager::Impl::feedKws(const std::vector<float>& mono, int sample_rate) {
     if (!kws_spotter || !kws_stream || mono.empty()) return;
 
@@ -391,6 +449,8 @@ void WakeupManager::Impl::feedKws(const std::vector<float>& mono, int sample_rat
                           "matched_user='{}', passed={}",
                  best_score, cfg.sv.threshold, matched_user, ev.sv_passed);
     }
+
+    playWakeAckAsync(ev);
 
     WakeCallback cb;
     {
@@ -578,6 +638,12 @@ void WakeupManager::Impl::shutdownImpl() {
     }
     listening.store(false, std::memory_order_release);
 
+    {
+        std::lock_guard<std::mutex> lk(tts_mtx);
+        tts_manager = nullptr;
+        owned_tts_manager.reset();
+    }
+
     if (kws_stream) {
         SherpaOnnxDestroyOnlineStream(kws_stream);
         kws_stream = nullptr;
@@ -611,7 +677,23 @@ WakeupManager::~WakeupManager() { shutdown(); }
 bool WakeupManager::init(audio::AudioManager* audio_manager,
                          const std::string& config_path) {
     try {
-        return impl_->initImpl(audio_manager, loadConfig(config_path));
+        WakeupConfig cfg = loadConfig(config_path);
+        const bool ok = impl_->initImpl(audio_manager, cfg);
+        if (!ok || !cfg.tts_ack.enabled) {
+            return ok;
+        }
+
+        auto owned_tts = std::make_unique<tts::TTSManager>();
+        if (owned_tts->init(audio_manager, tts::TTSManager::loadConfig(config_path))) {
+            std::lock_guard<std::mutex> lk(impl_->tts_mtx);
+            impl_->owned_tts_manager = std::move(owned_tts);
+            impl_->tts_manager = impl_->owned_tts_manager.get();
+            LOG_INFO(impl_->logger, "Wakeup TTS ack manager initialized from {}", config_path);
+        } else if (impl_->logger) {
+            LOG_WARNING(impl_->logger,
+                        "Wakeup TTS ack is enabled but TTSManager init failed");
+        }
+        return true;
     } catch (const std::exception& e) {
         // Logger may not exist yet; fall back to stderr-style log via Frontend.
         if (impl_->logger) {
@@ -668,6 +750,14 @@ void WakeupManager::stopListening() {
 void WakeupManager::setWakeCallback(WakeCallback cb) {
     std::lock_guard<std::mutex> lk(impl_->wake_cb_mtx);
     impl_->wake_cb = std::move(cb);
+}
+
+void WakeupManager::setTTSManager(tts::TTSManager* tts_manager) {
+    std::lock_guard<std::mutex> lk(impl_->tts_mtx);
+    if (tts_manager != impl_->owned_tts_manager.get()) {
+        impl_->owned_tts_manager.reset();
+    }
+    impl_->tts_manager = tts_manager;
 }
 
 void WakeupManager::muteWakeup(bool mute) {
@@ -747,6 +837,24 @@ WakeupConfig WakeupManager::loadConfig(const std::string& config_path) {
         wakeup["frame_queue_depth"].value_or(static_cast<int64_t>(cfg.frame_queue_depth)));
     cfg.mute_on_init      = wakeup["mute_on_init"].value_or(cfg.mute_on_init);
     cfg.cooldown_ms       = wakeup["cooldown_ms"].value_or(cfg.cooldown_ms);
+
+    const toml::node_view ack_node = wakeup["tts_ack"];
+    cfg.tts_ack.enabled = ack_node["enabled"].value_or(cfg.tts_ack.enabled);
+    if (const toml::array* phrases = ack_node["phrases"].as_array()) {
+        std::vector<std::string> parsed;
+        phrases->for_each([&parsed](const toml::value<std::string>& s) {
+            parsed.push_back(*s);
+        });
+        if (!parsed.empty()) {
+            cfg.tts_ack.phrases = std::move(parsed);
+        }
+    }
+    cfg.tts_ack.voice    = ack_node["voice"].value_or(cfg.tts_ack.voice);
+    cfg.tts_ack.language = ack_node["language"].value_or(cfg.tts_ack.language);
+    cfg.tts_ack.speed    = static_cast<float>(
+        ack_node["speed"].value_or(static_cast<double>(cfg.tts_ack.speed)));
+    cfg.tts_ack.volume   = static_cast<float>(
+        ack_node["volume"].value_or(static_cast<double>(cfg.tts_ack.volume)));
 
     const toml::node_view kws_node = wakeup["kws"];
     cfg.kws.encoder            = kws_node["encoder"].value_or(cfg.kws.encoder);

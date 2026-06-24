@@ -12,6 +12,10 @@ namespace audio {
 class AudioManager;
 }
 
+namespace tts {
+class TTSManager;
+}
+
 namespace wakeup {
 
 // ============================================================================
@@ -54,14 +58,30 @@ struct WakeupLoggingConfig {
     int         rotation_max_files = 7;
 };
 
+struct WakeupTtsAckConfig {
+    bool enabled = true;
+    std::vector<std::string> phrases{
+        "您好，有什么可以帮您？",
+        "我能帮您做什么？",
+        "请吩咐。",
+        "我在听。",
+        "有什么需要帮忙的吗？",
+    };
+    std::string voice;
+    std::string language = "zh-CN";
+    float       speed    = 1.0f;
+    float       volume   = 1.0f;
+};
+
 struct WakeupConfig {
-    std::vector<std::string> keywords{"你好弈宝", "弈宝弈宝"};
+    std::vector<std::string> keywords{"你好弈宝", "弈宝弈宝","嗨弈宝"};
     int                      sample_rate         = 16000;
     std::size_t              frame_queue_depth   = 50;
     bool                     mute_on_init        = false;
     int                      cooldown_ms         = 1500;
     WakeupKwsConfig          kws;
     WakeupSvConfig           sv;
+    WakeupTtsAckConfig       tts_ack;
     WakeupLoggingConfig      logging;
 };
 
@@ -106,6 +126,7 @@ public:
     void stopListening();
 
     void setWakeCallback(WakeCallback cb);
+    void setTTSManager(tts::TTSManager* tts_manager);
 
     // Silence wakeup processing during LISTENING / RESPONDING / MULTI_TURN_WAIT
     // (frames are still consumed but discarded so no false positive fires).

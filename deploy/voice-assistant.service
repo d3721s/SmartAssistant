@@ -1,0 +1,33 @@
+[Unit]
+Description=Smart Voice Assistant
+Wants=network-online.target systemd-time-wait-sync.service
+After=network-online.target systemd-time-wait-sync.service time-sync.target sound.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=embotic
+WorkingDirectory=/home/embotic/sa_workspace/src/SmartAssistant
+Environment=VOICE_ASSISTANT_CONFIG=/home/embotic/sa_workspace/src/SmartAssistant/Config/config.toml
+Environment=SHERPA_ONNX_ROOT=/usr/local/sherpa-onnx
+Environment=VOICE_ASSISTANT_ROS_SETUP=/home/embotic/nav_workspace/install/local_setup.bash
+Environment=RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+Environment=ROS_DOMAIN_ID=99
+Environment=ROS_LOCALHOST_ONLY=0
+Environment=FASTRTPS_DEFAULT_PROFILES_FILE=/home/embotic/nav_workspace/src/finav/config/fastdds_profiles.xml
+Environment=FINAV_REPO_DIR=/home/embotic/nav_workspace/src/finav
+Environment=FINAV_MAPS_DIR=/home/embotic/nav_workspace/src/finav/maps
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=PULSE_SERVER=unix:/run/user/1000/pulse/native
+Environment=PULSE_SOURCE=aec_source
+Environment=PULSE_SINK=aec_sink
+Environment=VOICE_ASSISTANT_PULSE_SOURCE_MASTER=alsa_input.usb-Seeed_Studio_ReSpeaker_Lite_0000000001-00.analog-stereo
+Environment=VOICE_ASSISTANT_PULSE_SINK_MASTER=alsa_output.usb-Seeed_Studio_ReSpeaker_Lite_0000000001-00.analog-stereo
+Environment=VOICE_ASSISTANT_BOOT_WAIT_SEC=120
+ExecStartPre=/usr/bin/env bash /home/embotic/sa_workspace/src/SmartAssistant/scripts/wait_online_tls.sh
+ExecStart=/home/embotic/sa_workspace/src/SmartAssistant/run_voice_assistant.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

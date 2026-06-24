@@ -1254,6 +1254,25 @@ public:
 
     bool start() {
         if (running_.exchange(true)) return true;
+        backend_.closeInput();
+
+        InternalFrame stale;
+        while (ring_.pop(stale)) {
+        }
+        diag_.capture_queue_depth.store(0, std::memory_order_relaxed);
+
+        DeviceConfig dc;
+        dc.device_name = cfg_.device;
+        dc.sample_rate = cfg_.sample_rate;
+        dc.channels    = cfg_.channels;
+        dc.frame_ms    = cfg_.frame_ms;
+        BackendError err = backend_.openInput(dc, neg_);
+        if (err != BackendError::kOk) {
+            running_.store(false, std::memory_order_release);
+            ALOG_ERR("CaptureManager: openInput at start failed err={}", (int)err);
+            return false;
+        }
+
         thread_ = std::thread([this] { loop(); });
         return true;
     }
@@ -1473,14 +1492,25 @@ private:
                 events_.push({AudioEventType::CaptureError, 0, 100});
             }
 
-            // 4) Beamforming – APM with multi-channel input collapses to
-            // out_ch internally.  We additionally take the first out_ch
-            // channels as a robust fallback.
+            // 4) Channel reduction after APM. The int16 APM path preserves
+            // the capture channel count, so explicitly downmix for mono.
             std::vector<int16_t> mono((size_t)frames * out_ch);
-            for (int n = 0; n < frames; ++n) {
-                for (int c = 0; c < out_ch; ++c) {
-                    mono[(size_t)n * out_ch + c] =
-                        mapped[(size_t)n * requested_ch + c];
+            if (out_ch == 1) {
+                for (int n = 0; n < frames; ++n) {
+                    int32_t sum = 0;
+                    for (int c = 0; c < requested_ch; ++c) {
+                        sum += mapped[(size_t)n * requested_ch + c];
+                    }
+                    mono[(size_t)n] =
+                        static_cast<int16_t>(sum / std::max(1, requested_ch));
+                }
+            } else {
+                for (int n = 0; n < frames; ++n) {
+                    for (int c = 0; c < out_ch; ++c) {
+                        mono[(size_t)n * out_ch + c] =
+                            mapped[(size_t)n * requested_ch +
+                                   std::min(c, requested_ch - 1)];
+                    }
                 }
             }
 
